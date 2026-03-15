@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BADISS SHOP DZ — Scanner Prix</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+  :root {
+    --bg:#0a0a0a; --surface:#141414; --surface2:#1e1e1e;
+    --accent:#f5c842; --text:#f0ede6; --muted:#666;
+    --border:#2a2a2a; --success:#4ade80; --error:#f87171;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+  header{padding:20px 24px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:relative;}
+  header::after{content:'';position:absolute;bottom:-1px;left:0;width:60px;height:2px;background:var(--accent);}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;letter-spacing:-0.03em;}
+  .logo span{color:var(--accent);}
+  .store-tag{font-size:0.7rem;color:var(--muted);background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border);letter-spacing:0.08em;text-transform:uppercase;}
+  main{padding:24px;max-width:480px;margin:0 auto;}
+  .intro{margin-bottom:28px;animation:fadeUp 0.5s ease both;}
+  .intro h1{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;line-height:1.1;margin-bottom:8px;}
+  .intro h1 em{color:var(--accent);font-style:normal;}
+  .intro p{color:var(--muted);font-size:0.9rem;line-height:1.5;}
+  .scanner-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px;animation:fadeUp 0.5s 0.1s ease both;}
+  .scanner-header{padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite;}
+  .scanner-header span{font-size:0.8rem;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);}
+  #scanner-viewport{position:relative;width:100%;height:240px;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  #scanner-viewport video,#scanner-viewport canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important;object-fit:cover;}
+  #scanner-viewport canvas{opacity:0;}
+  .scan-overlay{position:absolute;inset:0;z-index:10;pointer-events:none;display:flex;align-items:center;justify-content:center;}
+  .scan-frame{width:200px;height:100px;position:relative;}
+  .scan-frame::before,.scan-frame::after,.scan-frame .c-bl,.scan-frame .c-br{content:'';position:absolute;width:20px;height:20px;border-color:var(--accent);border-style:solid;}
+  .scan-frame::before{top:0;left:0;border-width:2px 0 0 2px;}
+  .scan-frame::after{top:0;right:0;border-width:2px 2px 0 0;}
+  .scan-frame .c-bl{bottom:0;left:0;border-width:0 0 2px 2px;}
+  .scan-frame .c-br{bottom:0;right:0;border-width:0 2px 2px 0;}
+  .scan-line{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scanMove 2s ease-in-out infinite;top:0;}
+  .scanner-idle{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--muted);z-index:5;}
+  .scanner-idle svg{opacity:0.4;}
+  .scanner-idle p{font-size:0.85rem;}
+  .scanner-actions{padding:14px 18px;display:flex;gap:10px;}
+  .btn{flex:1;padding:12px;border-radius:10px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;font-size:0.9rem;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:7px;}
+  .btn-primary{background:var(--accent);color:#000;}
+  .btn-primary:hover{background:#ffd84d;transform:translateY(-1px);}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+  .manual-section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:20px;animation:fadeUp 0.5s 0.2s ease both;}
+  .manual-section label{display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:10px;}
+  .input-row{display:flex;gap:10px;}
+  .input-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;transition:border-color 0.2s;}
+  .input-row input:focus{border-color:var(--accent);}
+  .input-row input::placeholder{color:var(--muted);}
+  .btn-search{background:var(--accent);color:#000;border:none;border-radius:10px;padding:11px 18px;cursor:pointer;font-weight:600;font-size:0.9rem;transition:all 0.2s;}
+  .btn-search:hover{background:#ffd84d;}
+  #result-section{animation:fadeUp 0.4s ease both;margin-bottom:20px;}
+  .result-card{border-radius:16px;overflow:hidden;border:1px solid var(--border);}
+  .result-card.found{border-color:var(--success);background:linear-gradient(135deg,#0a1a0f,#0d1f12);}
+  .result-card.not-found{border-color:var(--error);background:linear-gradient(135deg,#1a0a0a,#1f0d0d);}
+  .result-inner{padding:22px;}
+  .result-status{display:flex;align-items:center;gap:8px;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;}
+  .result-status.ok{color:var(--success);}
+  .result-status.err{color:var(--error);}
+  .status-dot{width:6px;height:6px;border-radius:50%;}
+  .ok .status-dot{background:var(--success);}
+  .err .status-dot{background:var(--error);}
+  .product-name{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700;margin-bottom:4px;line-height:1.2;}
+  .product-meta{font-size:0.8rem;color:var(--muted);margin-bottom:14px;}
+  .price-display{display:flex;align-items:baseline;gap:6px;}
+  .price-amount{font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;color:var(--accent);line-height:1;}
+  .price-currency{font-size:1.2rem;color:var(--accent);font-weight:600;}
+  .not-found-msg{font-size:1rem;color:var(--error);margin-bottom:4px;font-weight:500;}
+  .not-found-sub{font-size:0.85rem;color:var(--muted);}
+  .admin-toggle{text-align:center;margin-bottom:10px;}
+  .admin-toggle button{background:none;border:1px dashed var(--border);color:var(--muted);padding:8px 20px;border-radius:8px;cursor:pointer;font-size:0.8rem;font-family:'DM Sans',sans-serif;transition:all 0.2s;}
+  .admin-toggle button:hover{border-color:var(--accent);color:var(--accent);}
+  #admin-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:20px;display:none;animation:fadeUp 0.3s ease both;}
+  .admin-tab{flex:1;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.2s;}
+  .admin-tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700;}
+  .adm-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;transition:border-color 0.2s;margin-bottom:10px;}
+  .adm-input:focus{border-color:var(--accent);}
+  .adm-input::placeholder{color:var(--muted);}
+  .adm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .adm-grid input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;transition:border-color 0.2s;}
+  .adm-grid input:focus{border-color:var(--accent);}
+  .adm-grid input::placeholder{color:var(--muted);}
+  .products-list{max-height:220px;overflow-y:auto;}
+  .product-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--surface2);margin-bottom:6px;font-size:0.85rem;}
+  .product-item-info strong{display:block;margin-bottom:2px;}
+  .product-item-info span{color:var(--muted);font-size:0.75rem;font-family:monospace;}
+  .product-item-price{color:var(--accent);font-weight:600;}
+  .btn-delete{background:none;border:none;color:var(--error);cursor:pointer;padding:4px 8px;border-radius:4px;font-size:0.9rem;transition:background 0.2s;}
+  .btn-delete:hover{background:rgba(248,113,113,0.1);}
+  .mini-scanner{background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+  .mini-scan-vp{position:relative;width:100%;height:130px;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .mini-scan-vp video,.mini-scan-vp canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important;object-fit:cover;}
+  .mini-scan-vp canvas{opacity:0;}
+  .mini-scan-header{padding:8px 12px;font-size:0.75rem;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+  .mini-scan-footer{padding:8px 12px;display:flex;gap:8px;}
+  .mini-btn{flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:600;}
+  .mini-btn-on{background:var(--accent);color:#000;}
+  .mini-btn-off{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+  .msg-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--success);color:#000;padding:10px 22px;border-radius:30px;font-size:0.85rem;font-weight:600;opacity:0;transition:all 0.3s;z-index:999;pointer-events:none;}
+  .msg-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .hidden{display:none!important;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  @keyframes scanMove{0%{top:0}50%{top:calc(100% - 1px)}100%{top:0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">BADISS <span>SHOP DZ</span></div>
+  <div class="store-tag">Scanner Prix</div>
+</header>
+<main>
+  <div class="intro">
+    <h1>Scannez un<br><em>produit</em></h1>
+    <p>Pointez la caméra vers le code-barres<br>pour voir le prix instantanément.</p>
+  </div>
+  <div class="scanner-card">
+    <div class="scanner-header">
+      <div class="dot" id="scan-dot"></div>
+      <span id="scan-status-text">Prêt à scanner</span>
+    </div>
+    <div id="scanner-viewport">
+      <div class="scanner-idle" id="idle-msg">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM19 15h2v2h-2zM15 19h2v2h-2zM19 19h2v2h-2z"/></svg>
+        <p>Caméra inactive</p>
+      </div>
+      <div class="scan-overlay hidden" id="scan-overlay">
+        <div class="scan-frame"><div class="c-bl"></div><div class="c-br"></div><div class="scan-line"></div></div>
+      </div>
+    </div>
+    <div class="scanner-actions">
+      <button class="btn btn-primary" id="btn-start" onclick="startScanner()">📷 Activer la caméra</button>
+      <button class="btn btn-secondary hidden" id="btn-stop" onclick="stopScanner()">✕ Arrêter</button>
+    </div>
+  </div>
+  <div class="manual-section">
+    <label>Ou entrez le code-barres manuellement</label>
+    <div class="input-row">
+      <input type="text" id="manual-input" placeholder="Ex: 3017620401473" inputmode="numeric">
+      <button class="btn-search" onclick="searchManual()">→</button>
+    </div>
+  </div>
+  <div id="result-section" class="hidden"></div>
+  <div class="admin-toggle">
+    <button onclick="askPassword()">⚙ Gérer les produits</button>
+  </div>
+
+  <!-- MOT DE PASSE MODAL -->
+  <div id="pwd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;width:300px;animation:fadeUp 0.3s ease both;">
+      <div style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:6px;">🔒 Accès Admin</div>
+      <div style="color:var(--muted);font-size:0.82rem;margin-bottom:20px;">Mot de passe requis.</div>
+      <input type="password" id="pwd-input" placeholder="Mot de passe" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:10px;" onkeydown="if(event.key==='Enter') checkPassword()">
+      <div id="pwd-error" style="color:var(--error);font-size:0.8rem;margin-bottom:10px;display:none;">❌ Mot de passe incorrect</div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="checkPassword()" style="flex:1;background:var(--accent);color:#000;border:none;border-radius:10px;padding:11px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;">Entrer</button>
+        <button onclick="closePwdModal()" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:11px;font-family:'DM Sans',sans-serif;cursor:pointer;">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANNEAU ADMIN -->
+  <div id="admin-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;color:var(--accent);">⚙ Admin</div>
+      <button onclick="closeAdmin()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <button class="admin-tab active" id="tab-add" onclick="switchTab('add')">➕ Ajouter</button>
+      <button class="admin-tab" id="tab-edit" onclick="switchTab('edit')">🔍 Chercher & Modifier</button>
+    </div>
+
+    <!-- ONGLET AJOUTER -->
+    <div id="section-add">
+      <div class="mini-scanner" id="add-scanner-box">
+        <div class="mini-scan-header"><div id="add-dot" style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></div><span id="add-scan-txt">Scanner code-barres</span></div>
+        <div class="mini-scan-vp" id="add-vp">
+          <div id="add-idle" style="display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--muted);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM19 15h2v2h-2zM15 19h2v2h-2zM19 19h2v2h-2z"/></svg>
+            <span style="font-size:0.75rem;">Inactif</span>
+          </div>
+        </div>
+        <div class="mini-scan-footer">
+          <button id="add-btn-on" class="mini-btn mini-btn-on" onclick="startAddScanner()">📷 Activer</button>
+          <button id="add-btn-off" class="mini-btn mini-btn-off" onclick="stopAddScanner()" style="display:none;">✕ Arrêter</button>
+        </div>
+      </div>
+      <input type="text" id="f-barcode" class="adm-input" placeholder="Code-barres" inputmode="numeric">
+      <div class="adm-grid">
+        <input type="text" id="f-name" placeholder="Nom du produit">
+        <input type="number" id="f-price" placeholder="Prix (DA)" step="0.01">
+        <input type="text" id="f-brand" placeholder="Marque">
+        <input type="text" id="f-category" placeholder="Catégorie">
+      </div>
+      <button onclick="addProduct()" style="width:100%;background:var(--accent);color:#000;border:none;border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:18px;">+ Ajouter le produit</button>
+      <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Tous les produits (<span id="count">0</span>)</div>
+      <div class="products-list" id="products-list"></div>
+    </div>
+
+    <!-- ONGLET MODIFIER -->
+    <div id="section-edit" style="display:none;">
+      <div class="mini-scanner">
+        <div class="mini-scan-header"><div id="edit-dot" style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></div><span id="edit-scan-txt">Scanner pour chercher</span></div>
+        <div class="mini-scan-vp" id="edit-vp">
+          <div id="edit-idle" style="display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--muted);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM19 15h2v2h-2zM15 19h2v2h-2zM19 19h2v2h-2z"/></svg>
+            <span style="font-size:0.75rem;">Inactif</span>
+          </div>
+        </div>
+        <div class="mini-scan-footer">
+          <button id="edit-btn-on" class="mini-btn mini-btn-on" onclick="startEditScanner()">📷 Activer</button>
+          <button id="edit-btn-off" class="mini-btn mini-btn-off" onclick="stopEditScanner()" style="display:none;">✕ Arrêter</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input type="text" id="search-input" placeholder="Nom ou code-barres…" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" oninput="liveSearch()">
+        <button onclick="liveSearch()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 16px;font-weight:600;cursor:pointer;">🔍</button>
+      </div>
+      <div id="search-results"></div>
+      <div id="edit-form" style="display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:12px;padding:16px;margin-top:12px;">
+        <div style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;margin-bottom:12px;color:var(--accent);">✏️ Modifier</div>
+        <input type="hidden" id="edit-orig">
+        <input type="text" id="edit-barcode" placeholder="Code-barres" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;margin-bottom:10px;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <input type="text" id="edit-name" placeholder="Nom" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input type="number" id="edit-price" placeholder="Prix (DA)" step="0.01" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input type="text" id="edit-brand" placeholder="Marque" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input type="text" id="edit-category" placeholder="Catégorie" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="saveEdit()" style="flex:1;background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;">✅ Enregistrer</button>
+          <button onclick="document.getElementById('edit-form').style.display='none'" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:11px 14px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+          <button onclick="deleteFromEdit()" style="background:rgba(248,113,113,0.1);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:11px 14px;cursor:pointer;">🗑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<div class="msg-toast" id="toast"></div>
+<script>
+const ADMIN_PASSWORD = 'BADISSHOPDZ';
+const DEFAULT_PRODUCTS = [{"barcode": "0003010006630", "name": "Farine de blé T55", "category": "Céréales & Farines", "brand": "Moulins du Soleil", "unit": "kg", "price": 1.85}, {"barcode": "0003010006631", "name": "Farine complète T110", "category": "Céréales & Farines", "brand": "Moulins du Soleil", "unit": "kg", "price": 2.1}, {"barcode": "3017620406807", "name": "Semoule fine", "category": "Céréales & Farines", "brand": "Bonne Graine", "unit": "kg", "price": 1.65}, {"barcode": "5010006120010", "name": "Riz basmati", "category": "Céréales & Farines", "brand": "Uncle Ben's", "unit": "kg", "price": 3.2}, {"barcode": "3033710074204", "name": "Riz long grain", "category": "Céréales & Farines", "brand": "Lustucru", "unit": "kg", "price": 2.45}, {"barcode": "8076808523827", "name": "Pâtes spaghetti", "category": "Pâtes", "brand": "Barilla", "unit": "kg", "price": 1.3}, {"barcode": "8076808523834", "name": "Pâtes penne rigate", "category": "Pâtes", "brand": "Barilla", "unit": "kg", "price": 1.3}, {"barcode": "3038350019206", "name": "Pâtes farfalle", "category": "Pâtes", "brand": "Panzani", "unit": "kg", "price": 1.25}, {"barcode": "3038350019213", "name": "Pâtes tagliatelles", "category": "Pâtes", "brand": "Panzani", "unit": "kg", "price": 1.45}, {"barcode": "3256220040107", "name": "Maïs soufflé nature", "category": "Céréales & Farines", "brand": "PopCorn", "unit": "g", "price": 1.2}, {"barcode": "3155250387019", "name": "Huile d'olive vierge extra", "category": "Huiles & Graisses", "brand": "Puget", "unit": "L", "price": 5.9}, {"barcode": "3155251204066", "name": "Huile de tournesol", "category": "Huiles & Graisses", "brand": "Lesieur", "unit": "L", "price": 2.3}, {"barcode": "8690633100029", "name": "Huile de maïs", "category": "Huiles & Graisses", "brand": "Mazola", "unit": "L", "price": 2.8}, {"barcode": "3228021100024", "name": "Beurre doux", "category": "Huiles & Graisses", "brand": "Président", "unit": "g", "price": 2.95}, {"barcode": "3017760804306", "name": "Margarine végétale", "category": "Huiles & Graisses", "brand": "St Hubert", "unit": "g", "price": 2.4}, {"barcode": "8005110900019", "name": "Tomates pelées entières", "category": "Conserves", "brand": "Mutti", "unit": "g", "price": 1.5}, {"barcode": "3166290524414", "name": "Concentré de tomates", "category": "Conserves", "brand": "Amora", "unit": "g", "price": 1.1}, {"barcode": "3083681085517", "name": "Haricots verts en conserve", "category": "Conserves", "brand": "Bonduelle", "unit": "g", "price": 1.2}, {"barcode": "3083681085524", "name": "Petits pois en conserve", "category": "Conserves", "brand": "Bonduelle", "unit": "g", "price": 1.15}, {"barcode": "3083682034255", "name": "Maïs en conserve", "category": "Conserves", "brand": "Géant Vert", "unit": "g", "price": 1.35}, {"barcode": "3380380061028", "name": "Lentilles vertes", "category": "Légumineuses", "brand": "Priméal", "unit": "g", "price": 2.2}, {"barcode": "3270160100037", "name": "Pois chiches en conserve", "category": "Légumineuses", "brand": "Florette", "unit": "g", "price": 1.4}, {"barcode": "3017390010207", "name": "Haricots blancs", "category": "Légumineuses", "brand": "Cassegrain", "unit": "g", "price": 1.3}, {"barcode": "3380380061035", "name": "Lentilles corail", "category": "Légumineuses", "brand": "Priméal", "unit": "g", "price": 2.5}, {"barcode": "3083681085531", "name": "Flageolets", "category": "Légumineuses", "brand": "Bonduelle", "unit": "g", "price": 1.25}, {"barcode": "3274080002012", "name": "Sucre blanc en poudre", "category": "Sucre & Sel", "brand": "Béghin Say", "unit": "kg", "price": 1.4}, {"barcode": "3250391111015", "name": "Sucre roux cassonade", "category": "Sucre & Sel", "brand": "Daddy", "unit": "kg", "price": 2.1}, {"barcode": "3068320001017", "name": "Sel fin iodé", "category": "Sucre & Sel", "brand": "La Baleine", "unit": "kg", "price": 0.9}, {"barcode": "3182550000018", "name": "Gros sel marin", "category": "Sucre & Sel", "brand": "Le Guerandais", "unit": "kg", "price": 2.8}, {"barcode": "3166291201019", "name": "Poivre noir moulu", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.8}, {"barcode": "3166291201026", "name": "Cumin moulu", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.7}, {"barcode": "3166291201033", "name": "Paprika doux", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.7}, {"barcode": "3166291201040", "name": "Curcuma en poudre", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.75}, {"barcode": "3166291201057", "name": "Cannelle moulue", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.75}, {"barcode": "3166291201064", "name": "Thym séché", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.5}, {"barcode": "3166291201071", "name": "Laurier feuilles", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.5}, {"barcode": "3166291201088", "name": "Ras el hanout", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 2.2}, {"barcode": "3045320091011", "name": "Harissa en tube", "category": "Épices", "brand": "Mustapha", "unit": "g", "price": 1.9}, {"barcode": "3166291201095", "name": "Origan séché", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.5}, {"barcode": "3228021153044", "name": "Lait entier UHT", "category": "Produits Laitiers", "brand": "Lactel", "unit": "L", "price": 1.1}, {"barcode": "3228021153051", "name": "Lait demi-écrémé UHT", "category": "Produits Laitiers", "brand": "Lactel", "unit": "L", "price": 0.99}, {"barcode": "3033491000007", "name": "Yaourt nature", "category": "Produits Laitiers", "brand": "Danone", "unit": "g", "price": 0.45}, {"barcode": "3228021153068", "name": "Fromage râpé emmental", "category": "Produits Laitiers", "brand": "Président", "unit": "g", "price": 2.5}, {"barcode": "3228021153075", "name": "Crème fraîche épaisse", "category": "Produits Laitiers", "brand": "Elle & Vire", "unit": "mL", "price": 1.8}, {"barcode": "3228021100031", "name": "Beurre salé", "category": "Produits Laitiers", "brand": "Président", "unit": "g", "price": 3.1}, {"barcode": "3068320032011", "name": "Eau minérale naturelle", "category": "Boissons", "brand": "Evian", "unit": "L", "price": 0.8}, {"barcode": "3068320032028", "name": "Eau gazeuse", "category": "Boissons", "brand": "Perrier", "unit": "L", "price": 1.4}, {"barcode": "0012000161155", "name": "Jus d'orange 100%", "category": "Boissons", "brand": "Tropicana", "unit": "L", "price": 2.8}, {"barcode": "3228020200038", "name": "Jus de pomme", "category": "Boissons", "brand": "Joker", "unit": "L", "price": 2.5}, {"barcode": "8000070035658", "name": "Café moulu", "category": "Boissons", "brand": "Lavazza", "unit": "g", "price": 4.5}, {"barcode": "7613034056443", "name": "Café soluble", "category": "Boissons", "brand": "Nescafé", "unit": "g", "price": 5.9}, {"barcode": "8715700110011", "name": "Thé vert", "category": "Boissons", "brand": "Lipton", "unit": "unité", "price": 2.8}, {"barcode": "3024480010023", "name": "Tisane camomille", "category": "Boissons", "brand": "Eléphant", "unit": "unité", "price": 2.4}, {"barcode": "8714100862773", "name": "Cacao en poudre", "category": "Boissons", "brand": "Van Houten", "unit": "g", "price": 3.8}, {"barcode": "3166290524421", "name": "Moutarde de Dijon", "category": "Condiments", "brand": "Amora", "unit": "g", "price": 1.6}, {"barcode": "0000057370159", "name": "Ketchup", "category": "Condiments", "brand": "Heinz", "unit": "g", "price": 2.9}, {"barcode": "8710400113881", "name": "Mayonnaise", "category": "Condiments", "brand": "Hellmann's", "unit": "g", "price": 3.2}, {"barcode": "3257979001015", "name": "Vinaigre blanc", "category": "Condiments", "brand": "Melfor", "unit": "mL", "price": 1.4}, {"barcode": "8003561001017", "name": "Vinaigre balsamique", "category": "Condiments", "brand": "Leonardi", "unit": "mL", "price": 4.8}, {"barcode": "4011800301805", "name": "Sauce soja", "category": "Condiments", "brand": "Kikkoman", "unit": "mL", "price": 2.6}, {"barcode": "0011110891494", "name": "Sauce worcestershire", "category": "Condiments", "brand": "Lea & Perrins", "unit": "mL", "price": 3.1}, {"barcode": "3268220007052", "name": "Cornichons", "category": "Condiments", "brand": "Maille", "unit": "g", "price": 2.8}, {"barcode": "8001060015018", "name": "Câpres", "category": "Condiments", "brand": "Sacla", "unit": "g", "price": 2.5}, {"barcode": "3560070062100", "name": "Olives vertes", "category": "Condiments", "brand": "Tramier", "unit": "g", "price": 2.2}, {"barcode": "7622210073083", "name": "Biscuits LU Petit Beurre", "category": "Biscuits", "brand": "LU", "unit": "g", "price": 2.1}, {"barcode": "7622210249111", "name": "Biscuits Oreo", "category": "Biscuits", "brand": "Nabisco", "unit": "g", "price": 2.9}, {"barcode": "3046920029480", "name": "Chocolat noir 70%", "category": "Confiseries", "brand": "Lindt", "unit": "g", "price": 2.5}, {"barcode": "7622210049933", "name": "Chocolat au lait", "category": "Confiseries", "brand": "Milka", "unit": "g", "price": 1.8}, {"barcode": "3608580812003", "name": "Confiture fraises", "category": "Biscuits", "brand": "Bonne Maman", "unit": "g", "price": 3.2}, {"barcode": "3608580812010", "name": "Confiture abricots", "category": "Biscuits", "brand": "Bonne Maman", "unit": "g", "price": 3.2}, {"barcode": "3378930001019", "name": "Miel toutes fleurs", "category": "Biscuits", "brand": "Lune de Miel", "unit": "g", "price": 5.5}, {"barcode": "3017620401473", "name": "Nutella", "category": "Biscuits", "brand": "Ferrero", "unit": "g", "price": 4.8}, {"barcode": "5053827183543", "name": "Céréales Corn Flakes", "category": "Biscuits", "brand": "Kellogg's", "unit": "g", "price": 3.8}, {"barcode": "5017764002053", "name": "Muesli aux fruits", "category": "Biscuits", "brand": "Jordan's", "unit": "g", "price": 4.5}, {"barcode": "3228021153082", "name": "Levure chimique", "category": "Aide Culinaire", "brand": "Alsa", "unit": "g", "price": 1.8}, {"barcode": "3228021153099", "name": "Bicarbonate de soude", "category": "Aide Culinaire", "brand": "Alsacienne", "unit": "g", "price": 1.5}, {"barcode": "3017760804313", "name": "Gélatine en feuilles", "category": "Aide Culinaire", "brand": "Vahiné", "unit": "g", "price": 2.1}, {"barcode": "3017760804320", "name": "Sucre vanillé", "category": "Aide Culinaire", "brand": "Vahiné", "unit": "g", "price": 1.2}, {"barcode": "3017760804337", "name": "Extrait de vanille", "category": "Aide Culinaire", "brand": "Vahiné", "unit": "mL", "price": 3.5}, {"barcode": "7640105894093", "name": "Amidon de maïs", "category": "Aide Culinaire", "brand": "Maïzena", "unit": "g", "price": 2.2}, {"barcode": "3017760804344", "name": "Noix de cajou", "category": "Fruits Secs", "brand": "Vahiné", "unit": "g", "price": 4.5}, {"barcode": "3017760804351", "name": "Amandes entières", "category": "Fruits Secs", "brand": "Vahiné", "unit": "g", "price": 4.8}, {"barcode": "3700214900011", "name": "Raisins secs", "category": "Fruits Secs", "brand": "Soléou", "unit": "g", "price": 2.4}, {"barcode": "3017760804368", "name": "Noisettes", "category": "Fruits Secs", "brand": "Vahiné", "unit": "g", "price": 3.9}, {"barcode": "6111253003013", "name": "Dattes", "category": "Fruits Secs", "brand": "Medjool", "unit": "g", "price": 5.2}, {"barcode": "0000020474878", "name": "Figues sèches", "category": "Fruits Secs", "brand": "Alesto", "unit": "g", "price": 3.5}, {"barcode": "3017790011011", "name": "Pruneaux d'Agen", "category": "Fruits Secs", "brand": "Maître Prunille", "unit": "g", "price": 4.1}, {"barcode": "8005110900026", "name": "Purée de tomates passata", "category": "Conserves", "brand": "Mutti", "unit": "mL", "price": 2.1}, {"barcode": "8076808079982", "name": "Sauce tomate basilic", "category": "Conserves", "brand": "Barilla", "unit": "g", "price": 1.9}, {"barcode": "3083681085548", "name": "Petits pois carottes", "category": "Conserves", "brand": "Bonduelle", "unit": "g", "price": 1.3}, {"barcode": "8712566367351", "name": "Soupe de légumes", "category": "Conserves", "brand": "Knorr", "unit": "mL", "price": 1.8}, {"barcode": "7613034994141", "name": "Bouillon de poulet", "category": "Aide Culinaire", "brand": "Maggi", "unit": "unité", "price": 1.5}, {"barcode": "7613034994158", "name": "Bouillon de légumes", "category": "Aide Culinaire", "brand": "Maggi", "unit": "unité", "price": 1.5}, {"barcode": "3166290524438", "name": "Levure boulangère", "category": "Aide Culinaire", "brand": "Briochin", "unit": "g", "price": 0.95}, {"barcode": "3250392801011", "name": "Levain en poudre", "category": "Aide Culinaire", "brand": "Francine", "unit": "g", "price": 2.4}, {"barcode": "3256220040114", "name": "Chapelure", "category": "Aide Culinaire", "brand": "Tipiak", "unit": "g", "price": 2.2}, {"barcode": "3166295400027", "name": "Papier sulfurisé", "category": "Ménager", "brand": "Albal", "unit": "m", "price": 2.5}, {"barcode": "3166295400034", "name": "Film alimentaire", "category": "Ménager", "brand": "Albal", "unit": "m", "price": 2.8}, {"barcode": "3166295400041", "name": "Sacs congélation", "category": "Ménager", "brand": "Albal", "unit": "unité", "price": 2.3}, {"barcode": "3228020200045", "name": "Papier absorbant", "category": "Ménager", "brand": "Sopalin", "unit": "unité", "price": 3.5}, {"barcode": "3117690000010", "name": "Thon naturel en conserve", "category": "Conserves Poissons", "brand": "Saupiquet", "unit": "g", "price": 2.2}, {"barcode": "3660088000010", "name": "Sardines à l'huile", "category": "Conserves Poissons", "brand": "La Belle-Iloise", "unit": "g", "price": 2.8}, {"barcode": "3660089000010", "name": "Maquereau au vin blanc", "category": "Conserves Poissons", "brand": "Connétable", "unit": "g", "price": 2.6}, {"barcode": "0026662020128", "name": "Anchois en boîte", "category": "Conserves Poissons", "brand": "Goya", "unit": "g", "price": 2.9}, {"barcode": "9556041605228", "name": "Lait de coco", "category": "Exotique", "brand": "Ayam", "unit": "mL", "price": 2.5}, {"barcode": "3033710074211", "name": "Sauce nuoc mam", "category": "Exotique", "brand": "Suzi Wan", "unit": "mL", "price": 2.8}, {"barcode": "3166291201102", "name": "Curry en poudre", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.8}, {"barcode": "3166291201119", "name": "Gingembre moulu", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.75}, {"barcode": "3166291201126", "name": "Safran en filaments", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 4.9}, {"barcode": "3166291201133", "name": "Piment en poudre", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.7}, {"barcode": "0023400024520", "name": "Sauce hoisin", "category": "Exotique", "brand": "Lee Kum Kee", "unit": "mL", "price": 3.2}, {"barcode": "6223004040010", "name": "Tahin sésame", "category": "Exotique", "brand": "Al Kanater", "unit": "g", "price": 4.5}, {"barcode": "3256220040121", "name": "Couscous fin", "category": "Céréales & Farines", "brand": "Tipiak", "unit": "kg", "price": 3.2}, {"barcode": "3380380061042", "name": "Boulgour", "category": "Céréales & Farines", "brand": "Markal", "unit": "g", "price": 2.8}, {"barcode": "3770004720015", "name": "Quinoa blanc", "category": "Céréales & Farines", "brand": "Alter Eco", "unit": "g", "price": 4.2}, {"barcode": "3268220007069", "name": "Vinaigre de cidre", "category": "Condiments", "brand": "Maille", "unit": "mL", "price": 2.4}, {"barcode": "3245390008011", "name": "Cognac culinaire", "category": "Aide Culinaire", "brand": "Hennessy", "unit": "mL", "price": 4.9}, {"barcode": "3500530031011", "name": "Vin blanc culinaire", "category": "Aide Culinaire", "brand": "Arôme Culinaire", "unit": "mL", "price": 2.1}, {"barcode": "0626114003002", "name": "Sirop d'érable", "category": "Biscuits", "brand": "Amber", "unit": "mL", "price": 5.8}, {"barcode": "3268220007076", "name": "Vinaigre de framboise", "category": "Condiments", "brand": "Maille", "unit": "mL", "price": 3.2}, {"barcode": "9556041605235", "name": "Crème de coco", "category": "Exotique", "brand": "Ayam", "unit": "mL", "price": 2.8}, {"barcode": "3166291201140", "name": "Poivre blanc moulu", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.8}, {"barcode": "3166291201157", "name": "Muscade moulue", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.75}, {"barcode": "3166291201164", "name": "Clous de girofle", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.9}, {"barcode": "3017760804375", "name": "Eau de fleur d'oranger", "category": "Aide Culinaire", "brand": "Vahiné", "unit": "mL", "price": 3.2}, {"barcode": "3017760804382", "name": "Eau de rose", "category": "Aide Culinaire", "brand": "Vahiné", "unit": "mL", "price": 3.2}, {"barcode": "3033710074228", "name": "Huile de sésame", "category": "Huiles & Graisses", "brand": "Suzi Wan", "unit": "mL", "price": 3.8}, {"barcode": "3000405011015", "name": "Graisse végétale Végétaline", "category": "Huiles & Graisses", "brand": "Végétaline", "unit": "g", "price": 2.6}, {"barcode": "3017760804399", "name": "Agar-agar", "category": "Aide Culinaire", "brand": "Vahiné", "unit": "g", "price": 2.5}, {"barcode": "3017760804406", "name": "Poudre d'amandes", "category": "Fruits Secs", "brand": "Vahiné", "unit": "g", "price": 4.2}, {"barcode": "3250391111022", "name": "Sucre glace", "category": "Sucre & Sel", "brand": "Daddy", "unit": "kg", "price": 1.8}, {"barcode": "4011800301812", "name": "Vinaigre de riz", "category": "Condiments", "brand": "Kikkoman", "unit": "mL", "price": 3.5}, {"barcode": "3166291201171", "name": "Coriandre moulue", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 1.7}, {"barcode": "3166291201188", "name": "Anis étoilé", "category": "Épices", "brand": "Ducros", "unit": "g", "price": 2.2}];
+
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyBz4iWwmxF1RJnfm2X7ooGUUsYnJ399Ypo",
+  authDomain: "masuperette-9789a.firebaseapp.com",
+  databaseURL: "https://masuperette-9789a-default-rtdb.firebaseio.com",
+  projectId: "masuperette-9789a",
+  storageBucket: "masuperette-9789a.firebasestorage.app",
+  messagingSenderId: "1097431782049",
+  appId: "1:1097431782049:web:945b0a2511d708628056e0"
+};
+firebase.initializeApp(firebaseConfig);
+const dbRef = firebase.database().ref('products');
+
+window._cachedProducts = [];
+
+function loadProducts(){ return window._cachedProducts || []; }
+function findProduct(bc){ return loadProducts().find(p=>p.barcode===bc.trim())||null; }
+function addProductToDb(product){ dbRef.child(product.barcode).set(product); }
+function deleteProductFromDb(bc){ dbRef.child(bc).remove(); }
+
+// Écouter les changements en temps réel
+dbRef.on('value', function(snapshot) {
+  if (snapshot.exists()) {
+    window._cachedProducts = Object.values(snapshot.val());
+  } else {
+    var defaultObj = {};
+    DEFAULT_PRODUCTS.forEach(function(p) { defaultObj[p.barcode] = p; });
+    dbRef.set(defaultObj);
+    window._cachedProducts = DEFAULT_PRODUCTS.slice();
+  }
+  if(typeof renderProductList === 'function') renderProductList();
+  if(typeof liveSearch === 'function') liveSearch();
+});
+
+// RÉSULTAT
+function showResult(barcode){
+  const p = findProduct(barcode);
+  const s = document.getElementById('result-section');
+  s.classList.remove('hidden');
+  if(p){
+    s.innerHTML = `<div class="result-card found"><div class="result-inner">
+      <div class="result-status ok"><div class="status-dot"></div>Produit trouvé</div>
+      <div class="product-name">${p.name}</div>
+      <div class="product-meta">${p.brand} — ${p.category} — ${p.barcode}</div>
+      <div class="price-display"><div class="price-amount">${p.price.toLocaleString('fr-DZ')}</div><div class="price-currency">DA</div></div>
+    </div></div>`;
+  } else {
+    s.innerHTML = `<div class="result-card not-found"><div class="result-inner">
+      <div class="result-status err"><div class="status-dot"></div>Non trouvé</div>
+      <div class="not-found-msg">Produit introuvable</div>
+      <div class="not-found-sub">Code: <code>${barcode}</code></div>
+    </div></div>`;
+  }
+  s.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// SCANNER PRINCIPAL
+let scannerActive=false, scanCooldown=false, lastScanned='';
+function startScanner(){
+  document.getElementById('idle-msg').classList.add('hidden');
+  document.getElementById('scan-overlay').classList.remove('hidden');
+  document.getElementById('btn-start').classList.add('hidden');
+  document.getElementById('btn-stop').classList.remove('hidden');
+  document.getElementById('scan-status-text').textContent='Scan en cours…';
+  document.getElementById('scan-dot').style.background='#4ade80';
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('scanner-viewport'),constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader']},locate:true},function(err){
+    if(err){stopScanner();showToast('Erreur caméra: '+err.message,true);return;}
+    Quagga.start(); scannerActive=true;
+  });
+  Quagga.onDetected(function(r){
+    const code=r.codeResult.code;
+    if(!scanCooldown&&code!==lastScanned){
+      lastScanned=code; scanCooldown=true;
+      document.getElementById('scan-dot').style.background='#f5c842';
+      document.getElementById('scan-status-text').textContent='Détecté !';
+      setTimeout(()=>{document.getElementById('scan-dot').style.background='#4ade80';document.getElementById('scan-status-text').textContent='Scan en cours…';scanCooldown=false;},2000);
+      showResult(code);
+    }
+  });
+}
+function stopScanner(){
+  if(scannerActive){try{Quagga.stop();}catch(e){}scannerActive=false;}
+  document.getElementById('idle-msg').classList.remove('hidden');
+  document.getElementById('scan-overlay').classList.add('hidden');
+  document.getElementById('btn-start').classList.remove('hidden');
+  document.getElementById('btn-stop').classList.add('hidden');
+  document.getElementById('scan-status-text').textContent='Prêt à scanner';
+  document.getElementById('scan-dot').style.background='var(--accent)';
+}
+
+// SAISIE MANUELLE
+function searchManual(){ const v=document.getElementById('manual-input').value.trim(); if(v) showResult(v); }
+document.getElementById('manual-input').addEventListener('keydown',e=>{ if(e.key==='Enter') searchManual(); });
+
+// ADMIN
+function askPassword(){
+  const p=document.getElementById('admin-panel');
+  if(p.style.display==='block'){closeAdmin();return;}
+  document.getElementById('pwd-modal').style.display='flex';
+  document.getElementById('pwd-input').value='';
+  document.getElementById('pwd-error').style.display='none';
+  setTimeout(()=>document.getElementById('pwd-input').focus(),100);
+}
+function checkPassword(){
+  if(document.getElementById('pwd-input').value===ADMIN_PASSWORD){
+    closePwdModal();
+    document.getElementById('admin-panel').style.display='block';
+    switchTab('add'); renderProductList();
+  } else {
+    document.getElementById('pwd-error').style.display='block';
+    document.getElementById('pwd-input').value='';
+  }
+}
+function closePwdModal(){ document.getElementById('pwd-modal').style.display='none'; }
+function closeAdmin(){ document.getElementById('admin-panel').style.display='none'; stopAddScanner(); stopEditScanner(); }
+
+function switchTab(t){
+  document.getElementById('section-add').style.display=t==='add'?'block':'none';
+  document.getElementById('section-edit').style.display=t==='edit'?'block':'none';
+  document.getElementById('tab-add').classList.toggle('active',t==='add');
+  document.getElementById('tab-edit').classList.toggle('active',t==='edit');
+  if(t==='add'){stopEditScanner();renderProductList();}
+  if(t==='edit'){stopAddScanner();liveSearch();}
+}
+
+// AJOUTER
+function addProduct(){
+  const bc=document.getElementById('f-barcode').value.trim();
+  const name=document.getElementById('f-name').value.trim();
+  const price=parseFloat(document.getElementById('f-price').value);
+  const brand=document.getElementById('f-brand').value.trim();
+  const category=document.getElementById('f-category').value.trim();
+  if(!bc||!name||isNaN(price)){showToast('Remplissez code-barres, nom et prix',true);return;}
+  const prods=loadProducts();
+  const idx=prods.findIndex(p=>p.barcode===bc);
+  if(idx>=0){const updated={barcode:bc,name,price,brand,category,unit:prods[idx].unit||''};addProductToDb(updated);showToast('Produit mis à jour !');}
+  else{addProductToDb({barcode:bc,name,price,brand,category,unit:''});showToast('Produit ajouté !');}
+  document.getElementById('f-barcode').value='';
+  document.getElementById('f-name').value='';
+  document.getElementById('f-price').value='';
+  document.getElementById('f-brand').value='';
+  document.getElementById('f-category').value='';
+  stopAddScanner();
+  renderProductList();
+}
+function deleteProduct(bc){
+  if(!confirm('Supprimer ce produit ?'))return;
+  deleteProductFromDb(bc);
+  showToast('Supprimé');
+}
+function renderProductList(){
+  const prods=loadProducts();
+  document.getElementById('count').textContent=prods.length;
+  const list=document.getElementById('products-list');
+  if(!prods.length){list.innerHTML='<p style="color:var(--muted);text-align:center;padding:10px;font-size:0.85rem">Aucun produit</p>';return;}
+  list.innerHTML=prods.map(p=>`<div class="product-item">
+    <div class="product-item-info"><strong>${p.name}</strong><span>${p.barcode}</span></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="product-item-price">${p.price} DA</span>
+      <button class="btn-delete" onclick="deleteProduct('${p.barcode}')">✕</button>
+    </div></div>`).join('');
+}
+
+// CHERCHER & MODIFIER
+function liveSearch(){
+  const q=(document.getElementById('search-input').value||'').trim().toLowerCase();
+  const prods=loadProducts();
+  const res=q?prods.filter(p=>p.name.toLowerCase().includes(q)||p.barcode.includes(q)):prods;
+  const c=document.getElementById('search-results');
+  if(!res.length){c.innerHTML='<p style="color:var(--muted);text-align:center;padding:10px;font-size:0.85rem">Aucun résultat</p>';return;}
+  c.innerHTML=res.slice(0,20).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--surface2);margin-bottom:6px;font-size:0.85rem;">
+    <div><strong style="display:block;">${p.name}</strong><span style="color:var(--muted);font-size:0.75rem;font-family:monospace;">${p.barcode} — ${p.brand||''}</span></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="color:var(--accent);font-weight:600;">${p.price} DA</span>
+      <button onclick="openEditForm('${p.barcode}')" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:0.8rem;">✏️</button>
+    </div></div>`).join('');
+}
+function openEditForm(bc){
+  const p=findProduct(bc); if(!p)return;
+  document.getElementById('edit-orig').value=bc;
+  document.getElementById('edit-barcode').value=p.barcode;
+  document.getElementById('edit-name').value=p.name;
+  document.getElementById('edit-price').value=p.price;
+  document.getElementById('edit-brand').value=p.brand||'';
+  document.getElementById('edit-category').value=p.category||'';
+  document.getElementById('edit-form').style.display='block';
+  document.getElementById('edit-form').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function saveEdit(){
+  const orig=document.getElementById('edit-orig').value;
+  const bc=document.getElementById('edit-barcode').value.trim();
+  const name=document.getElementById('edit-name').value.trim();
+  const price=parseFloat(document.getElementById('edit-price').value);
+  const brand=document.getElementById('edit-brand').value.trim();
+  const category=document.getElementById('edit-category').value.trim();
+  if(!bc||!name||isNaN(price)){showToast('Remplissez tous les champs',true);return;}
+  const prods=loadProducts();
+  const idx=prods.findIndex(p=>p.barcode===orig);
+  if(idx<0){showToast('Introuvable',true);return;}
+  const updated={...prods[idx],barcode:bc,name,price,brand,category};
+  addProductToDb(updated);
+  if(orig!==bc) deleteProductFromDb(orig);
+  showToast('✅ Modifié !');
+  document.getElementById('edit-form').style.display='none';
+  liveSearch();
+}
+function deleteFromEdit(){
+  if(!confirm('Supprimer ?'))return;
+  const bc=document.getElementById('edit-orig').value;
+  deleteProductFromDb(bc);
+  document.getElementById('edit-form').style.display='none';
+  showToast('Supprimé'); liveSearch();
+}
+
+// MINI SCANNERS ADMIN
+let addScanActive=false, editScanActive=false;
+
+function startAddScanner(){
+  document.getElementById('add-idle').style.display='none';
+  document.getElementById('add-btn-on').style.display='none';
+  document.getElementById('add-btn-off').style.display='block';
+  document.getElementById('add-dot').style.background='#4ade80';
+  document.getElementById('add-scan-txt').textContent='Scan en cours…';
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('add-vp'),constraints:{facingMode:'environment'}},decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader']},locate:true},function(err){
+    if(err){stopAddScanner();showToast('Erreur caméra',true);return;}
+    Quagga.start(); addScanActive=true;
+  });
+  Quagga.onDetected(function(r){
+    if(!addScanActive)return;
+    const code=r.codeResult.code;
+    document.getElementById('f-barcode').value=code;
+    document.getElementById('add-dot').style.background='#f5c842';
+    document.getElementById('add-scan-txt').textContent='✅ '+code;
+    stopAddScanner();
+    document.getElementById('f-name').focus();
+  });
+}
+function stopAddScanner(){
+  if(addScanActive){try{Quagga.stop();}catch(e){} addScanActive=false;}
+  const el=document.getElementById('add-idle'); if(el) el.style.display='flex';
+  const on=document.getElementById('add-btn-on'); if(on) on.style.display='block';
+  const off=document.getElementById('add-btn-off'); if(off) off.style.display='none';
+}
+
+function startEditScanner(){
+  document.getElementById('edit-idle').style.display='none';
+  document.getElementById('edit-btn-on').style.display='none';
+  document.getElementById('edit-btn-off').style.display='block';
+  document.getElementById('edit-dot').style.background='#4ade80';
+  document.getElementById('edit-scan-txt').textContent='Scan en cours…';
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('edit-vp'),constraints:{facingMode:'environment'}},decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader']},locate:true},function(err){
+    if(err){stopEditScanner();showToast('Erreur caméra',true);return;}
+    Quagga.start(); editScanActive=true;
+  });
+  Quagga.onDetected(function(r){
+    if(!editScanActive)return;
+    const code=r.codeResult.code;
+    document.getElementById('search-input').value=code;
+    document.getElementById('edit-dot').style.background='#f5c842';
+    document.getElementById('edit-scan-txt').textContent='✅ '+code;
+    stopEditScanner();
+    liveSearch();
+  });
+}
+function stopEditScanner(){
+  if(editScanActive){try{Quagga.stop();}catch(e){} editScanActive=false;}
+  const el=document.getElementById('edit-idle'); if(el) el.style.display='flex';
+  const on=document.getElementById('edit-btn-on'); if(on) on.style.display='block';
+  const off=document.getElementById('edit-btn-off'); if(off) off.style.display='none';
+}
+
+function showToast(msg,isError=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=isError?'var(--error)':'var(--success)';
+  t.style.color=isError?'#fff':'#000';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+</script>
+</body>
+</html>
